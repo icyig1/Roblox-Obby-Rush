@@ -9,6 +9,7 @@ Config.CourseWidth = 34
 Config.WalkSpeed = 18
 Config.SpeedPassWalkSpeed = 22
 Config.JumpPower = 52
+Config.JumpHeight = 7.5
 
 Config.Rewards = {
 	CheckpointCoins = 3,
