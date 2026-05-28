@@ -1,6 +1,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
+local StarterPlayer = game:GetService("StarterPlayer")
 local DataStoreService = game:GetService("DataStoreService")
 local MarketplaceService = game:GetService("MarketplaceService")
 local RunService = game:GetService("RunService")
@@ -10,6 +11,12 @@ local Config = require(ReplicatedStorage:WaitForChild("ObbyRushConfig"))
 local DATASTORE_NAME = "OneMinuteObbyRush_PlayerData_v1"
 local SAVE_RETRY_COUNT = 3
 
+StarterPlayer.CharacterWalkSpeed = Config.WalkSpeed
+StarterPlayer.CharacterJumpPower = Config.JumpPower
+StarterPlayer.CharacterJumpHeight = Config.JumpHeight
+pcall(function()
+	StarterPlayer.CharacterUseJumpPower = true
+end)
 local playerStore = DataStoreService:GetDataStore(DATASTORE_NAME)
 local rng = Random.new()
 
@@ -270,9 +277,14 @@ local function applyCharacterPerks(player, character)
 	local humanoid = character:WaitForChild("Humanoid", 8)
 	local root = character:WaitForChild("HumanoidRootPart", 8)
 	if humanoid then
-		humanoid.UseJumpPower = true
+		pcall(function()
+			humanoid.UseJumpPower = true
+		end)
 		humanoid.WalkSpeed = hasPass(player, "SpeedBoost") and Config.SpeedPassWalkSpeed or Config.WalkSpeed
 		humanoid.JumpPower = Config.JumpPower
+		humanoid.JumpHeight = Config.JumpHeight
+		humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
+		humanoid:SetStateEnabled(Enum.HumanoidStateType.Freefall, true)
 	end
 
 	if root and hasPass(player, "VIPTrail") then
