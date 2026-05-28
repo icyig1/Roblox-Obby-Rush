@@ -1,0 +1,23 @@
+{
+  "name": "OneMinuteObbyRush",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "ObbyRushConfig": {
+        "$path": "src/ReplicatedStorage/ObbyRushConfig.lua"
+      }
+    },
+    "ServerScriptService": {
+      "OneMinuteObbyRushServer": {
+        "$path": "src/ServerScriptService/OneMinuteObbyRush.server.lua"
+      }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "ObbyRushClient": {
+          "$path": "src/StarterPlayer/StarterPlayerScripts/ObbyRushClient.client.lua"
+        }
+      }
+    }
+  }
+}
