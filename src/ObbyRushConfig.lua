@@ -1,10 +1,13 @@
 local Config = {}
 
 Config.RoundLength = 60
-Config.IntermissionLength = 15
+Config.QueueCountdown = 15
+Config.MinPlayersToStart = 2
+Config.MaxPlayersPerRound = 10
 Config.RoomsPerRound = 8
 Config.RoomLength = 72
 Config.CourseWidth = 34
+Config.RoomHeight = 28
 
 Config.WalkSpeed = 18
 Config.SpeedPassWalkSpeed = 22
