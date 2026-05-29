@@ -9,6 +9,7 @@ local remotes = ReplicatedStorage:WaitForChild("ObbyRushRemotes")
 local roundStateEvent = remotes:WaitForChild("RoundState")
 local playerDataEvent = remotes:WaitForChild("PlayerData")
 local messageEvent = remotes:WaitForChild("Message")
+local openShopEvent = remotes:WaitForChild("OpenShop")
 local showMessage
 
 local screenGui = Instance.new("ScreenGui")
@@ -181,6 +182,10 @@ closeShop.Activated:Connect(function()
 	shopFrame.Visible = false
 end)
 
+openShopEvent.OnClientEvent:Connect(function()
+	shopFrame.Visible = true
+end)
+
 showMessage = function(text)
 	messageLabel.Text = text
 	messageLabel.Visible = true
@@ -214,8 +219,11 @@ roundStateEvent.OnClientEvent:Connect(function(state)
 	local phase = state.phase or "Loading"
 	local timeLeft = state.timeLeft or 0
 
-	if phase == "Intermission" then
-		timerLabel.Text = ("Next round: %ds"):format(timeLeft)
+	if phase == "Queue" then
+		timerLabel.Text = ("Queue: %d/%d"):format(state.queueCount or 0, state.maxPlayers or 10)
+		timerLabel.BackgroundColor3 = Color3.fromRGB(30, 64, 175)
+	elseif phase == "Countdown" then
+		timerLabel.Text = ("Starting: %ds"):format(timeLeft)
 		timerLabel.BackgroundColor3 = Color3.fromRGB(30, 64, 175)
 	elseif phase == "Round" then
 		timerLabel.Text = ("Race: %ds"):format(timeLeft)

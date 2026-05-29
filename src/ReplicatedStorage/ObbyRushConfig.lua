@@ -1,10 +1,22 @@
 local Config = {}
 
 Config.RoundLength = 60
-Config.IntermissionLength = 15
+Config.QueueCountdown = 15
+Config.MinPlayersToStart = 1 -- Use 1 for solo testing. Change back to 2 before public testing.
+Config.MaxPlayersPerRound = 10
 Config.RoomsPerRound = 8
 Config.RoomLength = 72
 Config.CourseWidth = 34
+Config.RoomHeight = 28
+
+Config.PointPositions = {
+	LobbySpawn = Vector3.new(0, 2, -108),
+	QueuePad = Vector3.new(0, 2, -82),
+	ShopPad = Vector3.new(-28, 2, -88),
+	RoundExitPad = Vector3.new(36, 2, -72),
+	WaitingCenter = Vector3.new(0, 4, -198),
+	LeaveQueuePad = Vector3.new(0, 4, -188),
+}
 
 Config.WalkSpeed = 18
 Config.SpeedPassWalkSpeed = 22

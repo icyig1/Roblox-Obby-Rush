@@ -14,16 +14,17 @@ Fast randomized obby races that restart every minute. Players understand the gam
 
 ## MVP feature set
 
-1. Script-generated lobby and obby course.
-2. 15-second intermission, 60-second race round.
-3. Randomized room sequence each round.
-4. Checkpoints after every room.
-5. Coins, wins, best time, XP, and levels.
-6. Persistent player data with DataStore fallback in Studio.
-7. Simple HUD with timer, stats, status, and progress.
-8. Shop panel with placeholders for gamepasses and developer products.
-9. Finish rewards and completion messages.
-10. Hazard respawn back to last checkpoint instead of full round failure.
+1. Script-generated lobby, waiting area, and obby course.
+2. Queue pad with a 15-second countdown once at least 2 players enter.
+3. Max 10-player race rounds with a 60-second timer.
+4. Randomized room sequence each round.
+5. Checkpoints after every room.
+6. Coins, wins, best time, XP, and levels.
+7. Persistent player data with DataStore fallback in Studio.
+8. Simple HUD with timer, stats, status, and progress.
+9. Shop panel with placeholders for gamepasses and developer products.
+10. Finish rewards and completion messages.
+11. Hazard floor respawn back to last checkpoint instead of full round failure.
 
 ## First update roadmap
 

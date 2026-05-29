@@ -45,10 +45,23 @@ local messageEvent = remotesFolder:FindFirstChild("Message") or Instance.new("Re
 messageEvent.Name = "Message"
 messageEvent.Parent = remotesFolder
 
+local openShopEvent = remotesFolder:FindFirstChild("OpenShop") or Instance.new("RemoteEvent")
+openShopEvent.Name = "OpenShop"
+openShopEvent.Parent = remotesFolder
+
+local PointPositions = Config.PointPositions
+local LOBBY_SPAWN_CFRAME = CFrame.new(PointPositions.LobbySpawn)
+local EXIT_SPAWN_CFRAME = CFrame.new(PointPositions.RoundExitPad)
+local WAITING_CENTER_CFRAME = CFrame.new(PointPositions.WaitingCenter)
+
 local playerData = {}
 local playerPasses = {}
 local roundProgress = {}
+local queuedPlayers = {}
+local queuedByPlayer = {}
+local activeRoundPlayers = {}
 local touchDebounces = {}
+local padDebounces = {}
 local currentRound = {
 	id = 0,
 	phase = "Loading",
@@ -73,6 +86,55 @@ local function makePart(parent, name, size, cframe, color, material)
 	part.BottomSurface = Enum.SurfaceType.Smooth
 	part.Parent = parent
 	return part
+end
+
+local function cleanupDefaultStudioObjects()
+	for _, child in ipairs(workspace:GetChildren()) do
+		if child.Name == "Baseplate" or (child:IsA("SpawnLocation") and not child:IsDescendantOf(worldFolder)) then
+			child:Destroy()
+		end
+	end
+end
+
+local function addGlassWalls(parent, name, pad, openTowardNegativeZ)
+	local thickness = 0.45
+	local wallHeight = 5
+	local padPosition = pad.Position
+	local wallY = padPosition.Y + (pad.Size.Y / 2) + (wallHeight / 2)
+	local zOffset = (pad.Size.Z / 2) + (thickness / 2)
+	local xOffset = (pad.Size.X / 2) + (thickness / 2)
+	local glassColor = Color3.fromRGB(191, 219, 254)
+
+	local leftWall = makePart(
+		parent,
+		name .. "GlassLeft",
+		Vector3.new(thickness, wallHeight, pad.Size.Z + thickness * 2),
+		CFrame.new(padPosition.X - xOffset, wallY, padPosition.Z),
+		glassColor,
+		Enum.Material.Glass
+	)
+	leftWall.Transparency = 0.45
+
+	local rightWall = makePart(
+		parent,
+		name .. "GlassRight",
+		Vector3.new(thickness, wallHeight, pad.Size.Z + thickness * 2),
+		CFrame.new(padPosition.X + xOffset, wallY, padPosition.Z),
+		glassColor,
+		Enum.Material.Glass
+	)
+	rightWall.Transparency = 0.45
+
+	local backZ = openTowardNegativeZ and (padPosition.Z + zOffset) or (padPosition.Z - zOffset)
+	local backWall = makePart(
+		parent,
+		name .. "GlassBack",
+		Vector3.new(pad.Size.X + thickness * 2, wallHeight, thickness),
+		CFrame.new(padPosition.X, wallY, backZ),
+		glassColor,
+		Enum.Material.Glass
+	)
+	backWall.Transparency = 0.45
 end
 
 local function makeTextBillboard(parent, text, sizeOffset)
@@ -119,6 +181,120 @@ local function teleportCharacter(player, cframe)
 	root.AssemblyAngularVelocity = Vector3.zero
 	root.CFrame = cframe * CFrame.new(0, 4, 0)
 	humanoid:ChangeState(Enum.HumanoidStateType.Running)
+end
+
+local function compactQueue()
+	local oldQueued = queuedByPlayer
+	local compacted = {}
+	queuedByPlayer = {}
+
+	for _, player in ipairs(queuedPlayers) do
+		if oldQueued[player] and player.Parent == Players then
+			table.insert(compacted, player)
+			queuedByPlayer[player] = true
+		end
+	end
+
+	queuedPlayers = compacted
+end
+
+local function getQueueCount()
+	compactQueue()
+	return #queuedPlayers
+end
+
+local function getQueueIndex(player)
+	compactQueue()
+	for index, queuedPlayer in ipairs(queuedPlayers) do
+		if queuedPlayer == player then
+			return index
+		end
+	end
+	return nil
+end
+
+local function getWaitingSlotCFrame(index)
+	local column = (index - 1) % 5
+	local row = math.floor((index - 1) / 5)
+	local x = (column - 2) * 8
+	local z = row == 0 and -6 or 6
+	return WAITING_CENTER_CFRAME * CFrame.new(x, 0, z)
+end
+
+local function teleportToWaitingSlot(player)
+	local index = getQueueIndex(player)
+	if index then
+		teleportCharacter(player, getWaitingSlotCFrame(index))
+	end
+end
+
+local function arrangeQueuedPlayers()
+	compactQueue()
+	for index, player in ipairs(queuedPlayers) do
+		teleportCharacter(player, getWaitingSlotCFrame(index))
+	end
+end
+
+local function removeFromQueue(player, teleportOut)
+	if not queuedByPlayer[player] then
+		return
+	end
+
+	queuedByPlayer[player] = nil
+	for index, queuedPlayer in ipairs(queuedPlayers) do
+		if queuedPlayer == player then
+			table.remove(queuedPlayers, index)
+			break
+		end
+	end
+
+	if teleportOut then
+		teleportCharacter(player, EXIT_SPAWN_CFRAME)
+		messageEvent:FireClient(player, "You left the queue.")
+	end
+
+	arrangeQueuedPlayers()
+end
+
+local function enqueuePlayer(player)
+	if activeRoundPlayers[player] then
+		messageEvent:FireClient(player, "Finish this round before joining the queue again.")
+		return
+	end
+
+	if queuedByPlayer[player] then
+		teleportToWaitingSlot(player)
+		messageEvent:FireClient(player, "You are already in the queue.")
+		return
+	end
+
+	if getQueueCount() >= Config.MaxPlayersPerRound then
+		messageEvent:FireClient(player, "Queue is full. Try the next round.")
+		return
+	end
+
+	table.insert(queuedPlayers, player)
+	queuedByPlayer[player] = true
+	teleportToWaitingSlot(player)
+	messageEvent:FireClient(
+		player,
+		("Queued! %d/%d players. Round starts when %d+ players are waiting."):format(
+			getQueueCount(),
+			Config.MaxPlayersPerRound,
+			Config.MinPlayersToStart
+		)
+	)
+end
+
+local function canUsePad(player, key, cooldown)
+	padDebounces[player] = padDebounces[player] or {}
+	local now = os.clock()
+	if padDebounces[player][key] and now - padDebounces[player][key] < cooldown then
+		return false
+	end
+
+	padDebounces[player][key] = now
+	return true
 end
 
 local function getDefaultData()
@@ -319,6 +495,7 @@ local function applyCharacterPerks(player, character)
 end
 
 local function setupLobby()
+	cleanupDefaultStudioObjects()
 	worldFolder:ClearAllChildren()
 
 	local lobby = Instance.new("Folder")
@@ -328,12 +505,11 @@ local function setupLobby()
 	local base = makePart(
 		lobby,
 		"LobbyPlatform",
-		Vector3.new(96, 3, 70),
+		Vector3.new(112, 3, 84),
 		CFrame.new(0, 0, -92),
 		Config.Colors.Lobby,
 		Enum.Material.SmoothPlastic
 	)
-	makeTextBillboard(base, "ONE-MINUTE OBBY RUSH", Vector3.new(0, 8, 0))
 
 	local spawn = Instance.new("SpawnLocation")
 	spawn.Name = "LobbySpawn"
@@ -341,21 +517,57 @@ local function setupLobby()
 	spawn.CanCollide = true
 	spawn.Neutral = true
 	spawn.AllowTeamChangeOnTouch = false
-	spawn.Size = Vector3.new(12, 1, 12)
-	spawn.CFrame = CFrame.new(0, 3, -105)
+	spawn.Size = Vector3.new(8, 1, 8)
+	spawn.CFrame = LOBBY_SPAWN_CFRAME
 	spawn.Color = Color3.fromRGB(46, 213, 115)
-	spawn.Material = Enum.Material.Neon
+	spawn.Material = Enum.Material.SmoothPlastic
+	spawn.Transparency = 1
+	spawn.CanCollide = false
 	spawn.Parent = lobby
+
+	local queuePad = makePart(
+		lobby,
+		"QueuePad",
+		Vector3.new(22, 1, 18),
+		CFrame.new(PointPositions.QueuePad),
+		Color3.fromRGB(46, 213, 115),
+		Enum.Material.Neon
+	)
+	makeTextBillboard(queuePad, "ONE-MINUTE OBBY RUSH", Vector3.new(0, 7, 0))
+	addGlassWalls(lobby, "QueuePad", queuePad, true)
+	queuePad.Touched:Connect(function(hit)
+		local player = playerFromHit(hit)
+		if player and canUsePad(player, "QueuePad", 1.5) then
+			enqueuePlayer(player)
+		end
+	end)
+
+	local exitSpawn = makePart(
+		lobby,
+		"RoundExitPad",
+		Vector3.new(16, 1, 16),
+		EXIT_SPAWN_CFRAME,
+		Color3.fromRGB(251, 191, 36),
+		Enum.Material.Neon
+	)
+	addGlassWalls(lobby, "RoundExitPad", exitSpawn, true)
 
 	local shopPad = makePart(
 		lobby,
 		"ShopPad",
 		Vector3.new(16, 1, 16),
-		CFrame.new(-28, 3, -88),
+		CFrame.new(PointPositions.ShopPad),
 		Color3.fromRGB(69, 170, 242),
 		Enum.Material.Neon
 	)
 	makeTextBillboard(shopPad, "SHOP", Vector3.new(0, 5, 0))
+	addGlassWalls(lobby, "ShopPad", shopPad, true)
+	shopPad.Touched:Connect(function(hit)
+		local player = playerFromHit(hit)
+		if player and canUsePad(player, "ShopPad", 1) then
+			openShopEvent:FireClient(player)
+		end
+	end)
 
 	local leaderboardWall = makePart(
 		lobby,
@@ -366,6 +578,39 @@ local function setupLobby()
 		Enum.Material.SmoothPlastic
 	)
 	makeTextBillboard(leaderboardWall, "Finish rounds fast. Earn coins. Beat friends.", Vector3.new(0, 2, 0))
+
+	local waiting = Instance.new("Folder")
+	waiting.Name = "WaitingArea"
+	waiting.Parent = worldFolder
+
+	local waitingPlatform = makePart(
+		waiting,
+		"WaitingPlatform",
+		Vector3.new(58, 3, 36),
+		CFrame.new(0, 2, -198),
+		Color3.fromRGB(224, 242, 254),
+		Enum.Material.SmoothPlastic
+	)
+	makeTextBillboard(waitingPlatform, "WAITING AREA", Vector3.new(0, 8, 0))
+
+	local exitQueuePad = makePart(
+		waiting,
+		"ExitQueuePad",
+		Vector3.new(14, 1, 12),
+		CFrame.new(PointPositions.LeaveQueuePad),
+		Color3.fromRGB(239, 68, 68),
+		Enum.Material.Neon
+	)
+	makeTextBillboard(exitQueuePad, "LEAVE QUEUE", Vector3.new(0, 5, 0))
+	addGlassWalls(waiting, "ExitQueuePad", exitQueuePad, true)
+	exitQueuePad.Touched:Connect(function(hit)
+		local player = playerFromHit(hit)
+		if player and canUsePad(player, "ExitQueuePad", 1) then
+			removeFromQueue(player, true)
+		end
+	end)
+
+	arrangeQueuedPlayers()
 end
 
 local function ensureLobbyOnly()
@@ -379,7 +624,7 @@ end
 local function respawnAtCheckpoint(player)
 	local progress = roundProgress[player]
 	if not progress or not progress.inRound then
-		teleportCharacter(player, CFrame.new(0, 5, -105))
+		teleportCharacter(player, EXIT_SPAWN_CFRAME)
 		return
 	end
 
@@ -409,16 +654,24 @@ local function connectHazard(part)
 end
 
 local function connectCoin(part)
-	local collectedByUserId = {}
+	local collected = false
 
 	part.Touched:Connect(function(hit)
 		local player = playerFromHit(hit)
-		if not player or collectedByUserId[player.UserId] then
+		if not player or collected then
 			return
 		end
 
-		collectedByUserId[player.UserId] = true
+		collected = true
 		addCoins(player, Config.Rewards.RoomCoinValue)
+		part.Transparency = 1
+		part.CanTouch = false
+		part.CanCollide = false
+		task.delay(0.1, function()
+			if part.Parent then
+				part:Destroy()
+			end
+		end)
 	end)
 
 	task.spawn(function()
@@ -531,6 +784,53 @@ local function addSideRails(parent, startX, endX)
 			Enum.Material.SmoothPlastic
 		)
 	end
+end
+
+local function buildRoomShell(parent, startX, roomIndex)
+	local length = Config.RoomLength - 8
+	local centerX = startX + length / 2
+	local wallHeight = Config.RoomHeight
+	local centerY = 4 + wallHeight / 2
+	local sideZ = Config.CourseWidth / 2 + 1
+
+	local floor = makePart(
+		parent,
+		"ResetFloor_" .. roomIndex,
+		Vector3.new(length, 1, Config.CourseWidth),
+		CFrame.new(centerX, 1.2, 0),
+		Config.Colors.Hazard,
+		Enum.Material.Neon
+	)
+	floor.Transparency = 0.18
+	connectHazard(floor)
+
+	makePart(
+		parent,
+		"LeftWall_" .. roomIndex,
+		Vector3.new(length, wallHeight, 2),
+		CFrame.new(centerX, centerY, -sideZ),
+		Color3.fromRGB(226, 232, 240),
+		Enum.Material.SmoothPlastic
+	)
+
+	makePart(
+		parent,
+		"RightWall_" .. roomIndex,
+		Vector3.new(length, wallHeight, 2),
+		CFrame.new(centerX, centerY, sideZ),
+		Color3.fromRGB(226, 232, 240),
+		Enum.Material.SmoothPlastic
+	)
+
+	local ceiling = makePart(
+		parent,
+		"Ceiling_" .. roomIndex,
+		Vector3.new(length, 2, Config.CourseWidth + 4),
+		CFrame.new(centerX, 4 + wallHeight, 0),
+		Color3.fromRGB(241, 245, 249),
+		Enum.Material.SmoothPlastic
+	)
+	ceiling.Transparency = 0.2
 end
 
 local function buildGapRoom(parent, startX)
@@ -780,9 +1080,9 @@ local function buildCourse()
 		roomFolder.Name = "Room_" .. roomIndex
 		roomFolder.Parent = course
 
+		buildRoomShell(roomFolder, startX, roomIndex)
 		local builder = roomBuilders[rng:NextInteger(1, #roomBuilders)]
 		builder(roomFolder, startX)
-		addSideRails(roomFolder, startX, startX + Config.RoomLength - 8)
 		addCheckpoint(roomFolder, roomIndex, startX + Config.RoomLength - 5)
 	end
 
@@ -806,27 +1106,84 @@ local function broadcastRoundState(timeLeft)
 		timeLeft = timeLeft,
 		roundId = currentRound.id,
 		roomsPerRound = Config.RoomsPerRound,
+		queueCount = getQueueCount(),
+		maxPlayers = Config.MaxPlayersPerRound,
+		minPlayers = Config.MinPlayersToStart,
 	})
 end
 
-local function runIntermission()
-	currentRound.phase = "Intermission"
-	for remaining = Config.IntermissionLength, 0, -1 do
-		broadcastRoundState(remaining)
-		task.wait(1)
+local function takeQueuedPlayersForRound()
+	compactQueue()
+	local selectedPlayers = {}
+
+	while #selectedPlayers < Config.MaxPlayersPerRound and #queuedPlayers > 0 do
+		local player = table.remove(queuedPlayers, 1)
+		queuedByPlayer[player] = nil
+		if player.Parent == Players then
+			table.insert(selectedPlayers, player)
+		end
+	end
+
+	arrangeQueuedPlayers()
+	return selectedPlayers
+end
+
+local function restoreSelectedPlayersToQueue(selectedPlayers)
+	for _, player in ipairs(selectedPlayers) do
+		if player.Parent == Players and not queuedByPlayer[player] then
+			table.insert(queuedPlayers, player)
+			queuedByPlayer[player] = true
+		end
+	end
+	arrangeQueuedPlayers()
+end
+
+local function waitForRoundQueue()
+	while true do
+		currentRound.phase = "Queue"
+
+		while getQueueCount() < Config.MinPlayersToStart do
+			broadcastRoundState(0)
+			task.wait(1)
+		end
+
+		currentRound.phase = "Countdown"
+		for remaining = Config.QueueCountdown, 1, -1 do
+			if getQueueCount() < Config.MinPlayersToStart then
+				for _, player in ipairs(queuedPlayers) do
+					messageEvent:FireClient(player, "Waiting for one more player.")
+				end
+				break
+			end
+
+			broadcastRoundState(remaining)
+			task.wait(1)
+		end
+
+		if getQueueCount() >= Config.MinPlayersToStart then
+			local selectedPlayers = takeQueuedPlayersForRound()
+			if #selectedPlayers >= Config.MinPlayersToStart then
+				return selectedPlayers
+			end
+			restoreSelectedPlayersToQueue(selectedPlayers)
+		end
 	end
 end
 
-local function runRound()
+local function runRound(selectedPlayers)
 	currentRound.id += 1
 	currentRound.phase = "Round"
 	currentRound.startedAt = os.clock()
 	currentRound.firstFinisher = nil
+	activeRoundPlayers = {}
 
 	buildCourse()
 
-	for _, player in ipairs(Players:GetPlayers()) do
-		beginPlayerRound(player)
+	for _, player in ipairs(selectedPlayers) do
+		if player.Parent == Players then
+			activeRoundPlayers[player] = true
+			beginPlayerRound(player)
+		end
 	end
 
 	for remaining = Config.RoundLength, 0, -1 do
@@ -837,12 +1194,16 @@ local function runRound()
 	currentRound.phase = "Ended"
 	broadcastRoundState(0)
 
-	for _, player in ipairs(Players:GetPlayers()) do
+	for player in pairs(activeRoundPlayers) do
 		local progress = roundProgress[player]
 		if progress then
 			progress.inRound = false
 		end
-		teleportCharacter(player, CFrame.new(0, 5, -105))
+		activeRoundPlayers[player] = nil
+		if player.Parent == Players then
+			teleportCharacter(player, EXIT_SPAWN_CFRAME)
+			messageEvent:FireClient(player, "Round over! Step on the green pad to queue again.")
+		end
 	end
 
 	task.wait(4)
@@ -926,18 +1287,23 @@ Players.PlayerAdded:Connect(function(player)
 	player.CharacterAdded:Connect(function(character)
 		applyCharacterPerks(player, character)
 		task.wait(0.5)
-		if currentRound.phase == "Round" then
+		if activeRoundPlayers[player] then
 			respawnAtCheckpoint(player)
+		elseif queuedByPlayer[player] then
+			teleportToWaitingSlot(player)
 		end
 	end)
 end)
 
 Players.PlayerRemoving:Connect(function(player)
 	savePlayerData(player)
+	removeFromQueue(player, false)
 	playerData[player] = nil
 	playerPasses[player] = nil
 	roundProgress[player] = nil
 	touchDebounces[player] = nil
+	padDebounces[player] = nil
+	activeRoundPlayers[player] = nil
 end)
 
 game:BindToClose(function()
@@ -955,7 +1321,7 @@ end)
 ensureLobbyOnly()
 task.spawn(function()
 	while true do
-		runIntermission()
-		runRound()
+		local selectedPlayers = waitForRoundQueue()
+		runRound(selectedPlayers)
 	end
 end)
