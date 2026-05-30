@@ -11,10 +11,10 @@ Config.RoomHeight = 28
 Config.RoomShellPadding = 18
 
 Config.PointPositions = {
-	LobbySpawn = Vector3.new(0, 2, -108),
-	QueuePad = Vector3.new(0, 2, -82),
-	ShopPad = Vector3.new(-28, 2, -88),
-	RoundExitPad = Vector3.new(36, 2, -72),
+	LobbySpawn = Vector3.new(0, 2, -80),
+	QueuePad = Vector3.new(0, 2, -120),
+	ShopPad = Vector3.new(-38, 2, -120),
+	RoundExitPad = Vector3.new(0, 2, -64),
 	WaitingCenter = Vector3.new(0, 4, -198),
 	LeaveQueuePad = Vector3.new(0, 4, -188),
 	FinisherWaitingCenter = Vector3.new(82, 4, -198),
