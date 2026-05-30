@@ -21,6 +21,43 @@ end)
 local playerStore = DataStoreService:GetDataStore(DATASTORE_NAME)
 local rng = Random.new()
 
+local winsLeaderboardStore = DataStoreService:GetOrderedDataStore("ObbyRushWins_v1")
+local leaderboardLabel = nil  -- holds the SurfaceGui TextLabel so we can update it
+
+local function refreshWinsLeaderboard()
+	if not leaderboardLabel then
+		warn("refreshWinsLeaderboard: leaderboardLabel is nil")
+		return
+	end
+
+	local ok, pages = pcall(function()
+		return winsLeaderboardStore:GetSortedAsync(false, 10)
+	end)
+
+	if not ok or not pages then
+		warn("refreshWinsLeaderboard: DataStore failed - " .. tostring(pages))
+		leaderboardLabel.Text = "🏆 TOP WINS\n(unavailable)"
+		return
+	end
+
+	local currentPage = pages:GetCurrentPage()
+	if #currentPage == 0 then
+		leaderboardLabel.Text = "🏆 TOP WINS\nNo data yet!"
+		return
+	end
+
+	local lines = { "🏆  TOP WINS" }
+	for rank, entry in ipairs(currentPage) do
+		local name = "[unknown]"
+		pcall(function()
+			name = Players:GetNameFromUserIdAsync(entry.key)
+		end)
+		table.insert(lines, ("#%d  %s — %d wins"):format(rank, name, entry.value))
+	end
+
+	leaderboardLabel.Text = table.concat(lines, "\n")
+end
+
 local worldFolder = workspace:FindFirstChild("ObbyRushWorld") or Instance.new("Folder")
 worldFolder.Name = "ObbyRushWorld"
 worldFolder.Parent = workspace
@@ -216,12 +253,13 @@ local function makeFinishOrderBoard(parent)
 		Enum.Material.SmoothPlastic
 	)
 
-	local billboard = Instance.new("BillboardGui")
-	billboard.Name = "FinishOrderGui"
-	billboard.AlwaysOnTop = true
-	billboard.Size = UDim2.fromOffset(460, 260)
-	billboard.StudsOffset = Vector3.new(0, 1, 0)
-	billboard.Parent = board
+	local surfaceGui = Instance.new("SurfaceGui")
+	surfaceGui.Name = "FinishOrderGui"
+	surfaceGui.Face = Enum.NormalId.Front
+	surfaceGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	surfaceGui.PixelsPerStud = 50
+	surfaceGui.AlwaysOnTop = false
+	surfaceGui.Parent = board
 
 	local label = Instance.new("TextLabel")
 	label.BackgroundTransparency = 0.15
@@ -233,7 +271,7 @@ local function makeFinishOrderBoard(parent)
 	label.TextSize = 24
 	label.TextWrapped = true
 	label.TextYAlignment = Enum.TextYAlignment.Top
-	label.Parent = billboard
+	label.Parent = surfaceGui
 
 	finishOrderLabel = label
 end
@@ -507,6 +545,9 @@ local function savePlayerData(player)
 			playerStore:SetAsync(tostring(player.UserId), data)
 		end)
 		if ok then
+			pcall(function()
+				winsLeaderboardStore:SetAsync(tostring(player.UserId), data.Wins)
+			end)
 			return
 		end
 		warn(("Save failed for %s attempt %d: %s"):format(player.Name, attempt, tostring(err)))
@@ -642,8 +683,31 @@ local function setupLobby()
 		Color3.fromRGB(46, 213, 115),
 		Enum.Material.Neon
 	)
-	makeTextBillboard(queuePad, "ONE-MINUTE OBBY RUSH", Vector3.new(0, 7, 0))
-	addGlassWalls(lobby, "QueuePad", queuePad, true)
+	
+	makeTextBillboard(queuePad, "JOIN QUEUE", Vector3.new(0, 5, 0))
+	
+	local surfaceGui = Instance.new("SurfaceGui")
+	surfaceGui.Name = "WinsLeaderboardGui"
+	surfaceGui.Face = Enum.NormalId.Front
+	surfaceGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	surfaceGui.PixelsPerStud = 40
+	surfaceGui.AlwaysOnTop = false
+	surfaceGui.Parent = leaderboardWall
+
+	local lbLabel = Instance.new("TextLabel")
+	lbLabel.BackgroundTransparency = 1
+	lbLabel.Size = UDim2.fromScale(1, 1)
+	lbLabel.Font = Enum.Font.GothamBold
+	lbLabel.Text = "🏆  TOP WINS\nLoading..."
+	lbLabel.TextColor3 = Color3.fromRGB(248, 250, 252)
+	lbLabel.TextSize = 28
+	lbLabel.TextWrapped = true
+	lbLabel.TextYAlignment = Enum.TextYAlignment.Top
+	lbLabel.Parent = surfaceGui
+
+	leaderboardLabel = lbLabel
+	refreshWinsLeaderboard()
+
 	queuePad.Touched:Connect(function(hit)
 		local player = playerFromHit(hit)
 		if player and canUsePad(player, "QueuePad", 1.5) then
@@ -659,7 +723,7 @@ local function setupLobby()
 		Color3.fromRGB(251, 191, 36),
 		Enum.Material.Neon
 	)
-	addGlassWalls(lobby, "RoundExitPad", exitSpawn, true)
+
 
 	local shopPad = makePart(
 		lobby,
@@ -670,7 +734,7 @@ local function setupLobby()
 		Enum.Material.Neon
 	)
 	makeTextBillboard(shopPad, "SHOP", Vector3.new(0, 5, 0))
-	addGlassWalls(lobby, "ShopPad", shopPad, true)
+
 	shopPad.Touched:Connect(function(hit)
 		local player = playerFromHit(hit)
 		if player and canUsePad(player, "ShopPad", 1) then
@@ -686,7 +750,6 @@ local function setupLobby()
 		Color3.fromRGB(31, 41, 55),
 		Enum.Material.SmoothPlastic
 	)
-	makeTextBillboard(leaderboardWall, "Finish rounds fast. Earn coins. Beat friends.", Vector3.new(0, 2, 0))
 
 	local waiting = Instance.new("Folder")
 	waiting.Name = "WaitingArea"
@@ -712,7 +775,7 @@ local function setupLobby()
 		Enum.Material.Neon
 	)
 	makeTextBillboard(exitQueuePad, "LEAVE QUEUE", Vector3.new(0, 5, 0))
-	addGlassWalls(waiting, "ExitQueuePad", exitQueuePad, true)
+
 	exitQueuePad.Touched:Connect(function(hit)
 		local player = playerFromHit(hit)
 		if player and canUsePad(player, "ExitQueuePad", 1) then
@@ -907,6 +970,12 @@ local function addFinish(parent, x)
 		addXP(player, Config.Rewards.FinishXP)
 		syncLeaderstats(player)
 		sendPlayerData(player)
+
+		pcall(function()
+			winsLeaderboardStore:SetAsync(tostring(player.UserId), data.Wins)
+		end)
+		refreshWinsLeaderboard()
+
 		teleportCharacter(player, getFinisherSlotCFrame(progress.finishPlace))
 		messageEvent:FireClient(player, ("You finished #%d!"):format(progress.finishPlace))
 	end)
@@ -1136,7 +1205,6 @@ local function buildChoiceRoom(parent, startX)
 			addRoomCoin(parent, Vector3.new(startX + 32, 8, z))
 		end
 
-		makeTextBillboard(lanePart, lane == safeLane and "SAFE" or "HOT", Vector3.new(0, 3, 0))
 	end
 end
 
@@ -1315,6 +1383,7 @@ local function runRound(selectedPlayers)
 	currentRound.phase = "Round"
 	currentRound.startedAt = os.clock()
 	currentRound.firstFinisher = nil
+	currentRound.finishOrder = {}
 	activeRoundPlayers = {}
 
 	buildCourse()
@@ -1465,3 +1534,4 @@ task.spawn(function()
 		runRound(selectedPlayers)
 	end
 end)
+
