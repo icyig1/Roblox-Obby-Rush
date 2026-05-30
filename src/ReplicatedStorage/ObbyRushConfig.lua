@@ -18,6 +18,21 @@ Config.PointPositions = {
 	LeaveQueuePad = Vector3.new(0, 4, -188),
 }
 
+-- Hazards only trigger from these body parts. This avoids unfair deaths from hats,
+-- arms, or accessories barely brushing a red part.
+Config.HazardTouchPartNames = {
+	HumanoidRootPart = true,
+	LowerTorso = true,
+	UpperTorso = true,
+	Torso = true,
+	LeftFoot = true,
+	RightFoot = true,
+	LeftLowerLeg = true,
+	RightLowerLeg = true,
+	["Left Leg"] = true,
+	["Right Leg"] = true,
+}
+
 Config.WalkSpeed = 18
 Config.SpeedPassWalkSpeed = 22
 Config.JumpPower = 52

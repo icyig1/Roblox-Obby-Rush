@@ -638,6 +638,10 @@ end
 
 local function connectHazard(part)
 	part.Touched:Connect(function(hit)
+		if not Config.HazardTouchPartNames[hit.Name] then
+			return
+		end
+
 		local player = playerFromHit(hit)
 		if not player then
 			return

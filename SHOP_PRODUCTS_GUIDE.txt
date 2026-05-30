@@ -1,0 +1,236 @@
+Roblox Obby Rush Shop And Product Guide
+=======================================
+
+This guide explains how the shop works in this project, where to create Roblox
+passes/products, and which code files to edit when adding or changing rewards.
+
+
+1. Where To Create Passes And Developer Products
+------------------------------------------------
+
+Create them in the Roblox Creator Dashboard:
+
+https://create.roblox.com/dashboard/creations
+
+Steps:
+
+1. Open the Creator Dashboard.
+2. Click your experience/game.
+3. Go to Monetization.
+4. Use Passes for permanent purchases.
+5. Use Developer Products for repeatable purchases.
+
+
+2. Game Passes Vs Developer Products
+------------------------------------
+
+Game Pass:
+
+- Bought once.
+- Owned forever.
+- Best for permanent perks.
+
+Good examples:
+
+- 2x Coins
+- VIP Trail
+- Permanent Speed Boost
+- VIP Area Access
+- Special nametag
+
+Developer Product:
+
+- Can be bought again and again.
+- Best for one-time rewards or consumables.
+
+Good examples:
+
+- 250 Coins
+- 1000 Coins
+- Skip Room
+- Revive
+- Temporary boost
+
+Simple rule:
+
+- If the player should own it forever, use a Game Pass.
+- If the player can buy it repeatedly, use a Developer Product.
+
+
+3. Where Product IDs Go
+-----------------------
+
+Edit this file:
+
+src/ReplicatedStorage/ObbyRushConfig.lua
+
+Look for:
+
+Config.GamePassIds = {
+	DoubleCoins = 0,
+	VIPTrail = 0,
+	SpeedBoost = 0,
+}
+
+Config.ProductIds = {
+	SkipRoom = 0,
+	SmallCoinPack = 0,
+	Revive = 0,
+}
+
+Replace each 0 with the real numeric ID from Roblox.
+
+Example:
+
+Config.GamePassIds = {
+	DoubleCoins = 123456789,
+	VIPTrail = 234567890,
+	SpeedBoost = 345678901,
+}
+
+Config.ProductIds = {
+	SkipRoom = 456789012,
+	SmallCoinPack = 567890123,
+	Revive = 678901234,
+}
+
+
+4. Where Shop Buttons Are Edited
+--------------------------------
+
+Edit this file:
+
+src/StarterPlayer/StarterPlayerScripts/ObbyRushClient.client.lua
+
+Look for:
+
+local shopButtons = {
+
+Each button has:
+
+- text: what the player sees.
+- y: how far down the button appears in the shop.
+- color: the button color.
+- action: what purchase prompt opens.
+
+Use promptGamePass for permanent gamepasses:
+
+action = function()
+	promptGamePass(Config.GamePassIds.DoubleCoins)
+end,
+
+Use promptProduct for repeatable developer products:
+
+action = function()
+	promptProduct(Config.ProductIds.SmallCoinPack)
+end,
+
+
+5. Where Reward Logic Is Edited
+-------------------------------
+
+Edit this file:
+
+src/ServerScriptService/OneMinuteObbyRush.server.lua
+
+Developer product rewards are handled in:
+
+local function handleProduct(player, productId)
+
+Game pass effects are mostly handled in:
+
+local function addCoins(player, amount)
+
+and:
+
+local function applyCharacterPerks(player, character)
+
+Current examples:
+
+- DoubleCoins doubles rewards inside addCoins.
+- SpeedBoost changes WalkSpeed inside applyCharacterPerks.
+- VIPTrail adds a trail inside applyCharacterPerks.
+- SmallCoinPack gives coins inside handleProduct.
+- SkipRoom moves the player to the next checkpoint inside handleProduct.
+- Revive respawns the player at the current checkpoint inside handleProduct.
+
+
+6. Adding A New Coin Product Example
+------------------------------------
+
+Goal: Add a repeatable 1000 Coins product.
+
+Step 1: Add the ID and reward amount in ObbyRushConfig.lua.
+
+Config.ProductIds = {
+	SkipRoom = 0,
+	SmallCoinPack = 0,
+	Revive = 0,
+	BigCoinPack = 0,
+}
+
+Config.ProductRewards = {
+	SmallCoinPackCoins = 250,
+	BigCoinPackCoins = 1000,
+}
+
+Step 2: Add a shop button in ObbyRushClient.client.lua.
+
+{
+	text = "1000 Coins",
+	y = 336,
+	color = Color3.fromRGB(234, 179, 8),
+	action = function()
+		promptProduct(Config.ProductIds.BigCoinPack)
+	end,
+},
+
+If the button is too low or cut off, increase the shop frame height:
+
+shopFrame.Size = UDim2.fromOffset(316, 400)
+
+Step 3: Add reward logic in handleProduct inside OneMinuteObbyRush.server.lua.
+
+elseif productId == Config.ProductIds.BigCoinPack and productId ~= 0 then
+	local data = playerData[player]
+	if data then
+		data.Coins += Config.ProductRewards.BigCoinPackCoins
+		syncLeaderstats(player)
+		sendPlayerData(player)
+		messageEvent:FireClient(player, "+" .. Config.ProductRewards.BigCoinPackCoins .. " coins added!")
+		return true
+	end
+
+
+7. Important Safety Rule
+------------------------
+
+The client script should only show the shop and prompt the purchase.
+
+The server script must give the actual reward.
+
+Do not give coins or permanent rewards only from the client script. Players can
+exploit client-only rewards. This project already uses the safer pattern:
+
+- Client opens the purchase prompt.
+- Roblox confirms the purchase.
+- Server grants the reward.
+
+
+8. Good First Shop Setup For This Game
+--------------------------------------
+
+Recommended Game Passes:
+
+- 2x Coins
+- VIP Trail
+- Speed Boost
+
+Recommended Developer Products:
+
+- 250 Coins
+- 1000 Coins
+- Skip Room
+- Revive
+
+Start small. Get 3-5 shop items working before adding a large shop.
