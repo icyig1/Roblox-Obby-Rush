@@ -10,6 +10,7 @@ local roundStateEvent = remotes:WaitForChild("RoundState")
 local playerDataEvent = remotes:WaitForChild("PlayerData")
 local messageEvent = remotes:WaitForChild("Message")
 local openShopEvent = remotes:WaitForChild("OpenShop")
+local clientReadyEvent = remotes:WaitForChild("ClientReady")
 local showMessage
 
 local screenGui = Instance.new("ScreenGui")
@@ -74,9 +75,9 @@ topBar.Position = UDim2.new(0, 16, 0, 16)
 topBar.Size = UDim2.new(1, -32, 0, 76)
 topBar.Parent = screenGui
 
-local timerLabel = makeLabel(topBar, "Timer", "Loading...", UDim2.fromOffset(0, 0), UDim2.fromOffset(240, 60), 24)
-local statsLabel = makeLabel(topBar, "Stats", "Coins: 0 | Wins: 0 | Level: 1", UDim2.fromOffset(252, 0), UDim2.fromOffset(330, 60), 17)
-local progressLabel = makeLabel(topBar, "Progress", "Best: --", UDim2.fromOffset(594, 0), UDim2.fromOffset(190, 60), 17)
+local timerLabel = makeLabel(topBar, "Timer", "Loading...", UDim2.new(0.5, -120, 0, 0), UDim2.fromOffset(240, 60), 24)
+local statsLabel = makeLabel(topBar, "Stats", "Coins: 0 | Wins: 0 | Level: 1", UDim2.fromOffset(0, 0), UDim2.fromOffset(330, 60), 17)
+local progressLabel = makeLabel(topBar, "Progress", "Best: --", UDim2.new(1, -190, 0, 0), UDim2.fromOffset(190, 60), 17)
 
 local shopButton = makeButton(screenGui, "ShopButton", "SHOP", UDim2.new(1, -128, 0, 98), UDim2.fromOffset(108, 44))
 
@@ -197,75 +198,3 @@ showMessage = function(text)
 		TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, false, 2.4),
 		{ TextTransparency = 1, BackgroundTransparency = 1 }
 	)
-	tween:Play()
-	tween.Completed:Once(function()
-		messageLabel.Visible = false
-	end)
-end
-
-local function formatBest(bestTime)
-	if not bestTime or bestTime == 0 then
-		return "--"
-	end
-	return tostring(bestTime) .. "s"
-end
-
-playerDataEvent.OnClientEvent:Connect(function(data)
-	statsLabel.Text = ("Coins: %d | Wins: %d | Level: %d"):format(data.Coins or 0, data.Wins or 0, data.Level or 1)
-	progressLabel.Text = "Best: " .. formatBest(data.BestTime)
-end)
-
-roundStateEvent.OnClientEvent:Connect(function(state)
-	local phase = state.phase or "Loading"
-	local timeLeft = state.timeLeft or 0
-
-	if phase == "Queue" then
-		timerLabel.Text = ("Queue: %d/%d"):format(state.queueCount or 0, state.maxPlayers or 10)
-		timerLabel.BackgroundColor3 = Color3.fromRGB(30, 64, 175)
-	elseif phase == "Countdown" then
-		timerLabel.Text = ("Starting: %ds"):format(timeLeft)
-		timerLabel.BackgroundColor3 = Color3.fromRGB(30, 64, 175)
-	elseif phase == "Round" then
-		timerLabel.Text = ("Race: %ds"):format(timeLeft)
-		timerLabel.BackgroundColor3 = timeLeft <= 10 and Color3.fromRGB(185, 28, 28) or Color3.fromRGB(15, 23, 42)
-	elseif phase == "Ended" then
-		timerLabel.Text = "Round over"
-		timerLabel.BackgroundColor3 = Color3.fromRGB(22, 101, 52)
-	else
-		timerLabel.Text = phase
-	end
-end)
-
-messageEvent.OnClientEvent:Connect(showMessage)
-
-local function scaleForSmallScreens()
-	local camera = workspace.CurrentCamera
-	if not camera then
-		return
-	end
-
-	local width = camera.ViewportSize.X
-	if width < 760 then
-		statsLabel.Position = UDim2.fromOffset(0, 66)
-		progressLabel.Position = UDim2.fromOffset(0, 132)
-		shopButton.Position = UDim2.new(1, -124, 0, 16)
-		shopFrame.Position = UDim2.new(0.5, -158, 0, 96)
-	else
-		statsLabel.Position = UDim2.fromOffset(252, 0)
-		progressLabel.Position = UDim2.fromOffset(594, 0)
-		shopButton.Position = UDim2.new(1, -128, 0, 98)
-		shopFrame.Position = UDim2.new(1, -336, 0, 152)
-	end
-end
-
-scaleForSmallScreens()
-local function connectCamera()
-	local camera = workspace.CurrentCamera
-	if camera then
-		camera:GetPropertyChangedSignal("ViewportSize"):Connect(scaleForSmallScreens)
-		scaleForSmallScreens()
-	end
-end
-
-connectCamera()
-workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(connectCamera)
