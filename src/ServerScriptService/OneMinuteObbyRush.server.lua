@@ -53,6 +53,7 @@ local PointPositions = Config.PointPositions
 local LOBBY_SPAWN_CFRAME = CFrame.new(PointPositions.LobbySpawn)
 local EXIT_SPAWN_CFRAME = CFrame.new(PointPositions.RoundExitPad)
 local WAITING_CENTER_CFRAME = CFrame.new(PointPositions.WaitingCenter)
+local FINISHER_CENTER_CFRAME = CFrame.new(PointPositions.FinisherWaitingCenter)
 
 local playerData = {}
 local playerPasses = {}
@@ -62,11 +63,14 @@ local queuedByPlayer = {}
 local activeRoundPlayers = {}
 local touchDebounces = {}
 local padDebounces = {}
+local finishOrderLabel = nil
 local currentRound = {
 	id = 0,
 	phase = "Loading",
 	startedAt = 0,
+	timeLeft = 0,
 	firstFinisher = nil,
+	finishOrder = {},
 	checkpointCFrames = {},
 	startCFrame = CFrame.new(0, 8, 0),
 	finishCFrame = CFrame.new(0, 8, 0),
@@ -137,6 +141,51 @@ local function addGlassWalls(parent, name, pad, openTowardNegativeZ)
 	backWall.Transparency = 0.45
 end
 
+local function addPlatformBarrier(parent, name, platform)
+	local thickness = 0.7
+	local wallHeight = 8
+	local position = platform.Position
+	local wallY = position.Y + (platform.Size.Y / 2) + (wallHeight / 2)
+	local xOffset = (platform.Size.X / 2) + (thickness / 2)
+	local zOffset = (platform.Size.Z / 2) + (thickness / 2)
+	local color = Color3.fromRGB(219, 234, 254)
+
+	local walls = {
+		{
+			suffix = "Left",
+			size = Vector3.new(thickness, wallHeight, platform.Size.Z + thickness * 2),
+			cframe = CFrame.new(position.X - xOffset, wallY, position.Z),
+		},
+		{
+			suffix = "Right",
+			size = Vector3.new(thickness, wallHeight, platform.Size.Z + thickness * 2),
+			cframe = CFrame.new(position.X + xOffset, wallY, position.Z),
+		},
+		{
+			suffix = "Front",
+			size = Vector3.new(platform.Size.X + thickness * 2, wallHeight, thickness),
+			cframe = CFrame.new(position.X, wallY, position.Z - zOffset),
+		},
+		{
+			suffix = "Back",
+			size = Vector3.new(platform.Size.X + thickness * 2, wallHeight, thickness),
+			cframe = CFrame.new(position.X, wallY, position.Z + zOffset),
+		},
+	}
+
+	for _, wallInfo in ipairs(walls) do
+		local wall = makePart(
+			parent,
+			name .. "Barrier" .. wallInfo.suffix,
+			wallInfo.size,
+			wallInfo.cframe,
+			color,
+			Enum.Material.Glass
+		)
+		wall.Transparency = 0.55
+	end
+end
+
 local function makeTextBillboard(parent, text, sizeOffset)
 	local billboard = Instance.new("BillboardGui")
 	billboard.Name = "Label"
@@ -155,6 +204,56 @@ local function makeTextBillboard(parent, text, sizeOffset)
 	label.TextStrokeColor3 = Color3.fromRGB(255, 255, 255)
 	label.TextStrokeTransparency = 0.25
 	label.Parent = billboard
+end
+
+local function makeFinishOrderBoard(parent)
+	local board = makePart(
+		parent,
+		"FinishOrderBoard",
+		Vector3.new(28, 16, 2),
+		FINISHER_CENTER_CFRAME * CFrame.new(0, 8, -20),
+		Color3.fromRGB(15, 23, 42),
+		Enum.Material.SmoothPlastic
+	)
+
+	local billboard = Instance.new("BillboardGui")
+	billboard.Name = "FinishOrderGui"
+	billboard.AlwaysOnTop = true
+	billboard.Size = UDim2.fromOffset(460, 260)
+	billboard.StudsOffset = Vector3.new(0, 1, 0)
+	billboard.Parent = board
+
+	local label = Instance.new("TextLabel")
+	label.BackgroundTransparency = 0.15
+	label.BackgroundColor3 = Color3.fromRGB(15, 23, 42)
+	label.Size = UDim2.fromScale(1, 1)
+	label.Font = Enum.Font.GothamBold
+	label.Text = "FINISH ORDER\nWaiting for finishers..."
+	label.TextColor3 = Color3.fromRGB(248, 250, 252)
+	label.TextSize = 24
+	label.TextWrapped = true
+	label.TextYAlignment = Enum.TextYAlignment.Top
+	label.Parent = billboard
+
+	finishOrderLabel = label
+end
+
+local function updateFinishOrderBoard()
+	if not finishOrderLabel then
+		return
+	end
+
+	if #currentRound.finishOrder == 0 then
+		finishOrderLabel.Text = "FINISH ORDER\nWaiting for finishers..."
+		return
+	end
+
+	local lines = { "FINISH ORDER" }
+	for place, result in ipairs(currentRound.finishOrder) do
+		table.insert(lines, ("#%d  %s - %ds"):format(place, result.displayName, result.time))
+	end
+
+	finishOrderLabel.Text = table.concat(lines, "\n")
 end
 
 local function playerFromHit(hit)
@@ -219,6 +318,14 @@ local function getWaitingSlotCFrame(index)
 	local x = (column - 2) * 8
 	local z = row == 0 and -6 or 6
 	return WAITING_CENTER_CFRAME * CFrame.new(x, 0, z)
+end
+
+local function getFinisherSlotCFrame(place)
+	local column = (place - 1) % 5
+	local row = math.floor((place - 1) / 5)
+	local x = (column - 2) * 8
+	local z = row == 0 and -6 or 6
+	return FINISHER_CENTER_CFRAME * CFrame.new(x, 0, z)
 end
 
 local function teleportToWaitingSlot(player)
@@ -496,6 +603,7 @@ end
 
 local function setupLobby()
 	cleanupDefaultStudioObjects()
+	finishOrderLabel = nil
 	worldFolder:ClearAllChildren()
 
 	local lobby = Instance.new("Folder")
@@ -510,6 +618,7 @@ local function setupLobby()
 		Config.Colors.Lobby,
 		Enum.Material.SmoothPlastic
 	)
+	addPlatformBarrier(lobby, "LobbyPlatform", base)
 
 	local spawn = Instance.new("SpawnLocation")
 	spawn.Name = "LobbySpawn"
@@ -592,6 +701,7 @@ local function setupLobby()
 		Enum.Material.SmoothPlastic
 	)
 	makeTextBillboard(waitingPlatform, "WAITING AREA", Vector3.new(0, 8, 0))
+	addPlatformBarrier(waiting, "WaitingPlatform", waitingPlatform)
 
 	local exitQueuePad = makePart(
 		waiting,
@@ -609,6 +719,23 @@ local function setupLobby()
 			removeFromQueue(player, true)
 		end
 	end)
+
+	local finishers = Instance.new("Folder")
+	finishers.Name = "FinisherWaitingRoom"
+	finishers.Parent = worldFolder
+
+	local finisherPlatform = makePart(
+		finishers,
+		"FinisherWaitingPlatform",
+		Vector3.new(58, 3, 36),
+		FINISHER_CENTER_CFRAME * CFrame.new(0, -2, 0),
+		Color3.fromRGB(254, 249, 195),
+		Enum.Material.SmoothPlastic
+	)
+	makeTextBillboard(finisherPlatform, "FINISHERS", Vector3.new(0, 8, 0))
+	addPlatformBarrier(finishers, "FinisherWaitingPlatform", finisherPlatform)
+	makeFinishOrderBoard(finishers)
+	updateFinishOrderBoard()
 
 	arrangeQueuedPlayers()
 end
@@ -629,7 +756,7 @@ local function respawnAtCheckpoint(player)
 	end
 
 	if progress.finished then
-		teleportCharacter(player, currentRound.finishCFrame)
+		teleportCharacter(player, getFinisherSlotCFrame(progress.finishPlace or 1))
 		return
 	end
 
@@ -754,6 +881,13 @@ local function addFinish(parent, x)
 		progress.finished = true
 		local finishTime = math.max(1, math.floor(os.clock() - currentRound.startedAt))
 		local reward = Config.Rewards.FinishCoins
+		table.insert(currentRound.finishOrder, {
+			userId = player.UserId,
+			displayName = player.DisplayName,
+			time = finishTime,
+		})
+		progress.finishPlace = #currentRound.finishOrder
+		updateFinishOrderBoard()
 
 		if not currentRound.firstFinisher then
 			currentRound.firstFinisher = player.UserId
@@ -773,6 +907,8 @@ local function addFinish(parent, x)
 		addXP(player, Config.Rewards.FinishXP)
 		syncLeaderstats(player)
 		sendPlayerData(player)
+		teleportCharacter(player, getFinisherSlotCFrame(progress.finishPlace))
+		messageEvent:FireClient(player, ("You finished #%d!"):format(progress.finishPlace))
 	end)
 end
 
