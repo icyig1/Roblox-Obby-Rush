@@ -899,7 +899,7 @@ local function addCheckpoint(parent, index, x)
 		Config.Colors.Checkpoint,
 		Enum.Material.Neon
 	)
-	makeTextBillboard(part, "ROOM " .. index, Vector3.new(0, 4, 0))
+
 	currentRound.checkpointCFrames[index] = part.CFrame
 
 	part.Touched:Connect(function(hit)
