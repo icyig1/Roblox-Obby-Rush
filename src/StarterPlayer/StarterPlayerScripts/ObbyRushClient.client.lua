@@ -10,7 +10,6 @@ local roundStateEvent = remotes:WaitForChild("RoundState")
 local playerDataEvent = remotes:WaitForChild("PlayerData")
 local messageEvent = remotes:WaitForChild("Message")
 local openShopEvent = remotes:WaitForChild("OpenShop")
-local clientReadyEvent = remotes:WaitForChild("ClientReady")
 local showMessage
 
 local screenGui = Instance.new("ScreenGui")
@@ -68,16 +67,37 @@ local function makeButton(parent, name, text, position, size)
 	return button
 end
 
-local topBar = Instance.new("Frame")
-topBar.Name = "TopBar"
-topBar.BackgroundTransparency = 1
-topBar.Position = UDim2.new(0, 16, 0, 16)
-topBar.Size = UDim2.new(1, -32, 0, 76)
-topBar.Parent = screenGui
 
-local timerLabel = makeLabel(topBar, "Timer", "Loading...", UDim2.new(0.5, -120, 0, 0), UDim2.fromOffset(240, 60), 24)
-local statsLabel = makeLabel(topBar, "Stats", "Coins: 0 | Wins: 0 | Level: 1", UDim2.fromOffset(0, 0), UDim2.fromOffset(330, 60), 17)
-local progressLabel = makeLabel(topBar, "Progress", "Best: --", UDim2.new(1, -190, 0, 0), UDim2.fromOffset(190, 60), 17)
+-- Big centered race timer
+local raceTimer = Instance.new("TextLabel")
+raceTimer.Name = "RaceTimer"
+raceTimer.BackgroundColor3 = Color3.fromRGB(15, 23, 42)
+raceTimer.BackgroundTransparency = 0.08
+raceTimer.Position = UDim2.new(0.5, -80, 0, 16)
+raceTimer.Size = UDim2.fromOffset(160, 60)
+raceTimer.Font = Enum.Font.GothamBlack
+raceTimer.Text = ""
+raceTimer.TextColor3 = Color3.fromRGB(248, 250, 252)
+raceTimer.TextSize = 32
+raceTimer.Visible = false
+raceTimer.Parent = screenGui
+makeCorner(raceTimer, 8)
+makeStroke(raceTimer, Color3.fromRGB(51, 65, 85), 1)
+
+local queueTimer = Instance.new("TextLabel")
+queueTimer.Name = "QueueTimer"
+queueTimer.BackgroundColor3 = Color3.fromRGB(30, 64, 175)
+queueTimer.BackgroundTransparency = 0.08
+queueTimer.Position = UDim2.new(0.5, -80, 0, 16)
+queueTimer.Size = UDim2.fromOffset(160, 60)
+queueTimer.Font = Enum.Font.GothamBlack
+queueTimer.Text = ""
+queueTimer.TextColor3 = Color3.fromRGB(248, 250, 252)
+queueTimer.TextSize = 28
+queueTimer.Visible = false
+queueTimer.Parent = screenGui
+makeCorner(queueTimer, 8)
+makeStroke(queueTimer, Color3.fromRGB(51, 65, 85), 1)
 
 local shopButton = makeButton(screenGui, "ShopButton", "SHOP", UDim2.new(1, -128, 0, 98), UDim2.fromOffset(108, 44))
 
@@ -88,7 +108,7 @@ messageLabel.BackgroundColor3 = Color3.fromRGB(22, 101, 52)
 local shopFrame = Instance.new("Frame")
 shopFrame.Name = "Shop"
 shopFrame.BackgroundColor3 = Color3.fromRGB(248, 250, 252)
-shopFrame.Position = UDim2.new(1, -336, 0, 152)
+shopFrame.Position = UDim2.new(0.5, -158, 0.5, -171)
 shopFrame.Size = UDim2.fromOffset(316, 342)
 shopFrame.Visible = false
 shopFrame.Parent = screenGui
@@ -198,3 +218,36 @@ showMessage = function(text)
 		TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, false, 2.4),
 		{ TextTransparency = 1, BackgroundTransparency = 1 }
 	)
+	tween:Play()
+	tween.Completed:Once(function()
+		messageLabel.Visible = false
+	end)
+end
+
+
+messageEvent.OnClientEvent:Connect(showMessage)
+
+local function scaleForSmallScreens()
+	local camera = workspace.CurrentCamera
+	if not camera then return end
+	local width = camera.ViewportSize.X
+	if width < 760 then
+		shopButton.Position = UDim2.new(1, -124, 0, 16)
+		shopFrame.Position = UDim2.new(0.5, -158, 0.5, -171)
+	else
+		shopButton.Position = UDim2.new(1, -128, 0, 16)
+		shopFrame.Position = UDim2.new(0.5, -158, 0.5, -171)
+	end
+end
+
+scaleForSmallScreens()
+local function connectCamera()
+	local camera = workspace.CurrentCamera
+	if camera then
+		camera:GetPropertyChangedSignal("ViewportSize"):Connect(scaleForSmallScreens)
+		scaleForSmallScreens()
+	end
+end
+
+connectCamera()
+workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(connectCamera)
